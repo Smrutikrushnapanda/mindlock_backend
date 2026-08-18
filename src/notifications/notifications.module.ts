@@ -1,19 +1,15 @@
-import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Schedule } from '../entities/schedule.entity';
 import { Notification } from '../entities/notification.entity';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
-import { ProtectionScheduleProcessor } from './protection-schedule.processor';
+import { ProtectionScheduleService } from './protection-schedule.service';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Notification, Schedule]),
-    BullModule.registerQueue({ name: 'protection-check' }),
-  ],
+  imports: [TypeOrmModule.forFeature([Notification, Schedule])],
   controllers: [NotificationsController],
-  providers: [NotificationsService, ProtectionScheduleProcessor],
-  exports: [NotificationsService],
+  providers: [NotificationsService, ProtectionScheduleService],
+  exports: [NotificationsService, ProtectionScheduleService],
 })
 export class NotificationsModule {}

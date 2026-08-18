@@ -1,50 +1,40 @@
-import { Logger, OnModuleInit } from '@nestjs/common';
-import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Job, Queue } from 'bullmq';
 import { Repository } from 'typeorm';
 import { Schedule } from '../entities/schedule.entity';
 import { NotificationsService } from './notifications.service';
 
 const ENDING_WINDOW_MIN = 10;
-const WEEK_DAY_MAP: Record<string, number> = {
-  Sun: 0,
-  Mon: 1,
-  Tue: 2,
-  Wed: 3,
-  Thu: 4,
-  Fri: 5,
-  Sat: 6,
-};
+const TICK_MS = 60_000;
 
 interface ScheduleState {
   activated: boolean;
   endingNotified: boolean;
 }
 
-@Processor('protection-check')
-export class ProtectionScheduleProcessor extends WorkerHost implements OnModuleInit {
-  private readonly logger = new Logger(ProtectionScheduleProcessor.name);
+@Injectable()
+export class ProtectionScheduleService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(ProtectionScheduleService.name);
   private readonly state = new Map<string, ScheduleState>();
+  private timer: NodeJS.Timeout | null = null;
 
   constructor(
     @InjectRepository(Schedule) private readonly schedules: Repository<Schedule>,
     private readonly notifications: NotificationsService,
-    @InjectQueue('protection-check') private readonly queue: Queue,
-  ) {
-    super();
-  }
+  ) {}
 
-  async onModuleInit() {
-    await this.queue.upsertJobScheduler(
-      'protection-check-every-minute',
-      { every: 60_000 },
-      { name: 'check', data: {} },
-    );
+  onModuleInit() {
+    this.timer = setInterval(() => this.check(), TICK_MS);
+    this.check();
     this.logger.log('Protection schedule checker started (every 60s)');
   }
 
-  async process(_job: Job): Promise<void> {
+  onModuleDestroy() {
+    if (this.timer) clearInterval(this.timer);
+    this.logger.log('Protection schedule checker stopped');
+  }
+
+  private async check(): Promise<void> {
     const schedules = await this.schedules.find({ where: { isActive: true } });
     const today = new Date();
     const dayKey = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][today.getDay()];

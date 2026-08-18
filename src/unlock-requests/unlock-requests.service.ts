@@ -1,4 +1,3 @@
-import { InjectQueue } from '@nestjs/bullmq';
 import {
   BadRequestException,
   ForbiddenException,
@@ -6,14 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Queue } from 'bullmq';
 import * as bcrypt from 'bcryptjs';
 import { Repository } from 'typeorm';
 import { Otp } from '../entities/otp.entity';
 import { UnlockRequest } from '../entities/unlock-request.entity';
 import { TrustedPerson } from '../entities/trusted-person.entity';
 import { NotificationsService } from '../notifications/notifications.service';
-import { OtpEmailJobData } from '../email/otp-email.processor';
+import { EmailService } from '../email/email.service';
 import { CreateUnlockRequestDto, VerifyOtpDto } from './dto';
 
 const OTP_TTL_MS = 5 * 60 * 1000;
@@ -28,8 +26,8 @@ export class UnlockRequestsService {
     @InjectRepository(UnlockRequest) private readonly requests: Repository<UnlockRequest>,
     @InjectRepository(Otp) private readonly otps: Repository<Otp>,
     @InjectRepository(TrustedPerson) private readonly persons: Repository<TrustedPerson>,
-    @InjectQueue('otp-email') private readonly otpEmailQueue: Queue<OtpEmailJobData>,
     private readonly notifications: NotificationsService,
+    private readonly email: EmailService,
   ) {}
 
   async create(userId: string, dto: CreateUnlockRequestDto) {
@@ -172,16 +170,11 @@ export class UnlockRequestsService {
     otp.verified = false;
     await this.otps.save(otp);
 
-    await this.otpEmailQueue.add(
-      'send',
-      {
-        to: trustedPerson.email,
-        code,
-        requestId,
-        trustedPersonName: trustedPerson.name,
-      },
-      { removeOnComplete: true, removeOnFail: 100 },
-    );
+    await this.email.sendOtpEmail({
+      to: trustedPerson.email,
+      code,
+      trustedPersonName: trustedPerson.name,
+    });
   }
 
   private generateCode(): string {
