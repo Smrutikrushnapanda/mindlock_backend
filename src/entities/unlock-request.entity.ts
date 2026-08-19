@@ -34,7 +34,7 @@ export class UnlockRequest {
   @Column({ default: 'pending' })
   status: string;
 
-  @CreateDateColumn({ name: 'requested_at' })
+  @CreateDateColumn({ name: 'requested_at', type: 'timestamptz' })
   requestedAt: Date;
 
   @Column({ name: 'responded_at', type: 'timestamptz', nullable: true })

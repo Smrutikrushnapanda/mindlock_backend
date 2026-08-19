@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AuthUser, CurrentUser } from '../auth/current-user.decorator';
-import { AppBlockingDto, PornBlockingDto } from './dto';
+import { AppBlockingDto, PornBlockingDto, VpnStatusDto } from './dto';
 import { ProtectionService } from './protection.service';
 
 @Controller('protection')
@@ -24,8 +24,18 @@ export class ProtectionController {
     return this.protection.setAppBlocking(user.id, dto.enabled);
   }
 
+  @Patch('vpn-status')
+  setVpnConnected(@CurrentUser() user: AuthUser, @Body() dto: VpnStatusDto) {
+    return this.protection.setVpnConnected(user.id, dto.connected);
+  }
+
   @Get('coverage')
   coverage(@CurrentUser() user: AuthUser) {
     return this.protection.coverage(user.id);
+  }
+
+  @Get('domains')
+  domains() {
+    return this.protection.domains();
   }
 }

@@ -34,7 +34,7 @@ export class User {
   @Column({ name: 'pin_hash', type: 'varchar', nullable: true })
   pinHash: string | null;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
   @OneToOne(() => TrustedPerson, (t) => t.user)

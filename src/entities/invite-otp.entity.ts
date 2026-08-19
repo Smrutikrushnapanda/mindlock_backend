@@ -1,23 +1,22 @@
 import {
   Column,
+  CreateDateColumn,
   Entity,
-  JoinColumn,
-  OneToOne,
+  Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { UnlockRequest } from './unlock-request.entity';
 
-@Entity('otps')
-export class Otp {
+@Entity('invite_otps')
+@Index(['email', 'verified'])
+export class InviteOtp {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'unlock_request_id', unique: true })
-  unlockRequestId: string;
+  @Column({ name: 'user_id' })
+  userId: string;
 
-  @OneToOne(() => UnlockRequest, (u) => u.otp)
-  @JoinColumn({ name: 'unlock_request_id' })
-  unlockRequest: UnlockRequest;
+  @Column()
+  email: string;
 
   @Column()
   code: string;
@@ -30,4 +29,7 @@ export class Otp {
 
   @Column({ default: false })
   verified: boolean;
+
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  createdAt: Date;
 }

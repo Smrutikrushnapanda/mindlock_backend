@@ -32,7 +32,7 @@ export class TrustedPerson {
   @Column({ default: false })
   verified: boolean;
 
-  @CreateDateColumn({ name: 'invited_at' })
+  @CreateDateColumn({ name: 'invited_at', type: 'timestamptz' })
   invitedAt: Date;
 
   @Column({ name: 'verified_at', type: 'timestamptz', nullable: true })

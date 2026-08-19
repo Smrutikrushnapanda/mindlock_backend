@@ -10,6 +10,8 @@ import { UnlockRequest } from './entities/unlock-request.entity';
 import { Otp } from './entities/otp.entity';
 import { Notification } from './entities/notification.entity';
 import { Device } from './entities/device.entity';
+import { InviteOtp } from './entities/invite-otp.entity';
+import { BlockedDomain } from './entities/blocked-domain.entity';
 
 config();
 
@@ -17,6 +19,7 @@ export default new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
+  extra: { options: '-c timezone=UTC' },
   entities: [
     User,
     TrustedPerson,
@@ -27,6 +30,8 @@ export default new DataSource({
     Otp,
     Notification,
     Device,
+    InviteOtp,
+    BlockedDomain,
   ],
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
   synchronize: false,

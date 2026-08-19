@@ -29,6 +29,6 @@ export class Device {
   @Column({ name: 'is_managed', default: false })
   isManaged: boolean;
 
-  @CreateDateColumn({ name: 'last_seen' })
+  @CreateDateColumn({ name: 'last_seen', type: 'timestamptz' })
   lastSeen: Date;
 }

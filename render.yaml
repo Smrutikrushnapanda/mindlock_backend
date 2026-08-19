@@ -1,0 +1,38 @@
+# Render.com deployment for the MindLock backend
+# Build: npm run build   Start: npm run start:prod
+name: mindlock-backend
+services:
+  - type: web
+    name: mindlock-backend
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start:prod
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_INVITE_SECRET
+        generateValue: true
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: '587'
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM_NAME
+        value: MindLock
+      - key: SMTP_FROM
+        value: MindLock <noreply@mindlock.app>
+      - key: APP_URL
+        value: https://mindlock-backend.onrender.com
+      - key: CORS_ORIGINS
+        value: '*'
+      - key: RATE_LIMIT_PER_MINUTE
+        value: '120'

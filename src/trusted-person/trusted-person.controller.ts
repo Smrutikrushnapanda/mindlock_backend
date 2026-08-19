@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AuthUser, CurrentUser } from '../auth/current-user.decorator';
-import { InviteTrustedPersonDto, UpdateTrustedPersonDto, VerifyTrustedPersonDto } from './dto';
+import { InviteTrustedPersonDto, UpdateTrustedPersonDto, VerifyTrustedPersonOtpDto } from './dto';
 import { TrustedPersonService } from './trusted-person.service';
 
 @Controller('trusted-person')
@@ -26,8 +26,14 @@ export class TrustedPersonController {
     return this.persons.update(user.id, dto);
   }
 
+  @Post('verify-otp')
+  @UseGuards(JwtAuthGuard)
+  verifyOtp(@CurrentUser() user: AuthUser, @Body() dto: VerifyTrustedPersonOtpDto) {
+    return this.persons.verifyOtp(user.id, dto);
+  }
+
   @Post('verify')
-  verify(@Body() dto: VerifyTrustedPersonDto) {
+  verify(@Body() dto: { token: string }) {
     return this.persons.verify(dto);
   }
 }

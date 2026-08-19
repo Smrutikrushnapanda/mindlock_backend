@@ -9,3 +9,8 @@ export class AppBlockingDto {
   @IsBoolean()
   enabled: boolean;
 }
+
+export class VpnStatusDto {
+  @IsBoolean()
+  connected: boolean;
+}

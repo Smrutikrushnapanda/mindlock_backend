@@ -14,6 +14,11 @@ export class BlockedAppsController {
     return this.apps.findAll(user.id);
   }
 
+  @Get('catalog')
+  catalog() {
+    return this.apps.catalog();
+  }
+
   @Post('bulk-update')
   bulkUpdate(@CurrentUser() user: AuthUser, @Body() dto: BulkUpdateAppsDto) {
     return this.apps.bulkUpdate(user.id, dto);

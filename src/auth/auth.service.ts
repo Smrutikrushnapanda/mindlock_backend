@@ -75,6 +75,17 @@ export class AuthService {
     return { message: 'PIN set successfully' };
   }
 
+  async verifyPin(userId: string, dto: SetPinDto) {
+    const user = await this.users.findOne({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException('User not found');
+    if (!user.pinHash) {
+      throw new BadRequestException('No PIN is set for this account');
+    }
+    const matches = await bcrypt.compare(dto.pin, user.pinHash);
+    if (!matches) throw new UnauthorizedException('Incorrect PIN');
+    return { message: 'PIN verified' };
+  }
+
   async toggleBiometric(userId: string, dto: ToggleBiometricDto) {
     const user = await this.users.findOne({ where: { id: userId } });
     if (!user) throw new UnauthorizedException('User not found');
@@ -126,6 +137,7 @@ export class AuthService {
         name: user.name,
         email: user.email,
         biometricEnabled: user.biometricEnabled,
+        hasPin: !!user.pinHash,
       },
     };
   }

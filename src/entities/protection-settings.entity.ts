@@ -40,6 +40,6 @@ export class ProtectionSettings {
   @Column({ name: 'vpn_connected', default: false })
   vpnConnected: boolean;
 
-  @CreateDateColumn({ name: 'last_sync' })
+  @CreateDateColumn({ name: 'last_sync', type: 'timestamptz' })
   lastSync: Date;
 }

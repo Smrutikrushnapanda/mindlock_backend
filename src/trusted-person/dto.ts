@@ -1,4 +1,4 @@
-import { IsEmail, IsIn, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsOptional, IsString, Matches, MinLength } from 'class-validator';
 
 export const RELATIONSHIPS = ['parent', 'partner', 'friend', 'mentor', 'other'] as const;
 
@@ -29,16 +29,17 @@ export class UpdateTrustedPersonDto {
   relationship?: string;
 }
 
-export class VerifyTrustedPersonDto {
+export class VerifyTrustedPersonOtpDto {
   @IsString()
-  token: string;
+  @Matches(/^\d{6}$/, { message: 'code must be a 6-digit number' })
+  code: string;
 }
 
 export class InviteTokenPayload {
-  @IsUUID()
+  @IsString()
   userId: string;
 
-  @IsString()
+  @IsEmail()
   email: string;
 
   @IsString()

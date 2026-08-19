@@ -32,6 +32,6 @@ export class Notification {
   @Column({ default: false })
   read: boolean;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }

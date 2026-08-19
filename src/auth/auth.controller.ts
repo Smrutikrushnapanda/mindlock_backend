@@ -29,6 +29,12 @@ export class AuthController {
     return this.auth.setPin(user.id, dto);
   }
 
+  @Post('pin/verify')
+  @UseGuards(JwtAuthGuard)
+  verifyPin(@CurrentUser() user: AuthUser, @Body() dto: SetPinDto) {
+    return this.auth.verifyPin(user.id, dto);
+  }
+
   @Post('biometric/toggle')
   @UseGuards(JwtAuthGuard)
   toggleBiometric(@CurrentUser() user: AuthUser, @Body() dto: ToggleBiometricDto) {

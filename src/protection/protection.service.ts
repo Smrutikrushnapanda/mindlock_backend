@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { BlockedDomain } from '../entities/blocked-domain.entity';
 import { ProtectionSettings } from '../entities/protection-settings.entity';
 
 @Injectable()
@@ -8,6 +9,8 @@ export class ProtectionService {
   constructor(
     @InjectRepository(ProtectionSettings)
     private readonly settings: Repository<ProtectionSettings>,
+    @InjectRepository(BlockedDomain)
+    private readonly domainRepo: Repository<BlockedDomain>,
   ) {}
 
   async ensureForUser(userId: string): Promise<ProtectionSettings> {
@@ -46,6 +49,13 @@ export class ProtectionService {
     return this.settings.save(settings);
   }
 
+  async setVpnConnected(userId: string, connected: boolean) {
+    const settings = await this.ensureForUser(userId);
+    settings.vpnConnected = connected;
+    settings.lastSync = new Date();
+    return this.settings.save(settings);
+  }
+
   async coverage(userId: string) {
     const settings = await this.ensureForUser(userId);
     let percent = 0;
@@ -62,5 +72,23 @@ export class ProtectionService {
       vpnConnected: settings.vpnConnected,
       lastSync: settings.lastSync,
     };
+  }
+
+  async domains() {
+    const rows = await this.domainRepo.find({ where: { isActive: true } });
+    const byCategory = new Map<string, string[]>();
+    for (const row of rows) {
+      const list = byCategory.get(row.category) ?? [];
+      list.push(row.domain);
+      byCategory.set(row.category, list);
+    }
+    return Array.from(byCategory.entries()).map(([category, domains]) => ({
+      category,
+      domains,
+    }));
+  }
+
+  async findBlockedDomainByName(domain: string) {
+    return this.domainRepo.findOne({ where: { domain: domain.toLowerCase() } });
   }
 }

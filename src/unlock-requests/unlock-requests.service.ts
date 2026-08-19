@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -20,6 +21,7 @@ const RESEND_COOLDOWN_MS = 45 * 1000;
 
 @Injectable()
 export class UnlockRequestsService {
+  private readonly logger = new Logger(UnlockRequestsService.name);
   private readonly lastResend = new Map<string, number>();
 
   constructor(
@@ -170,11 +172,20 @@ export class UnlockRequestsService {
     otp.verified = false;
     await this.otps.save(otp);
 
-    await this.email.sendOtpEmail({
-      to: trustedPerson.email,
-      code,
-      trustedPersonName: trustedPerson.name,
-    });
+    // Email delivery must never fail the request itself; the user can resend.
+    await this.email
+      .sendOtpEmail({
+        to: trustedPerson.email,
+        code,
+        trustedPersonName: trustedPerson.name,
+      })
+      .catch((err) =>
+        this.logger.error(
+          `Failed to send unlock OTP to ${trustedPerson.email}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        ),
+      );
   }
 
   private generateCode(): string {
