@@ -79,7 +79,7 @@ export class TrustedPersonService {
       });
 
     if (result.delivered) {
-      this.logger.log(`[TrustedPerson] Email accepted by SMTP`);
+      this.logger.log(`[TrustedPerson] Email sent successfully`);
     } else {
       this.logger.warn(
         `[TrustedPerson] Email not delivered — OTP was generated but email failed`
