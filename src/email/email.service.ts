@@ -54,6 +54,23 @@ export class EmailService implements OnModuleInit {
           ? { user, pass: this.config.get<string>('SMTP_PASS') }
           : undefined,
       });
+
+      // Verify SMTP connection on startup
+      try {
+        await this.transporter.verify();
+        this.logger.log(
+          `[Email] SMTP connection verified successfully (${host}:${port})`,
+        );
+      } catch (err) {
+        const error = err instanceof Error ? err.message : String(err);
+        this.logger.error(
+          `[Email] SMTP connection failed (${host}:${port}): ${error}`,
+        );
+        this.logger.error(
+          `[Email] Emails will fail until SMTP credentials are fixed. ` +
+          `For Gmail: ensure 2FA is enabled and a valid App Password is used.`,
+        );
+      }
     }
   }
 
@@ -71,6 +88,7 @@ export class EmailService implements OnModuleInit {
 
   async send(message: EmailMessage): Promise<EmailResult> {
     try {
+      this.logger.log(`[Email] Sending email to ${message.to}`);
       const info = await this.transporter.sendMail({
         from: this.resolveFrom(),
         ...message,
@@ -78,10 +96,11 @@ export class EmailService implements OnModuleInit {
       if (this.useEthereal) {
         this.logger.log(`Ethereal preview URL: ${nodemailer.getTestMessageUrl(info)}`);
       }
+      this.logger.log(`[Email] Email accepted by SMTP (messageId: ${info.messageId})`);
       return { delivered: true, messageId: info.messageId };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Email delivery failed to ${message.to}: ${error}`);
+      this.logger.error(`[Email] Email delivery failed to ${message.to}: ${error}`);
       return { delivered: false, error };
     }
   }
@@ -93,7 +112,7 @@ export class EmailService implements OnModuleInit {
     purpose?: string;
   }): Promise<EmailResult> {
     const { to, code, trustedPersonName, purpose = 'temporary unlock from MindLock protection' } = input;
-    this.logger.log(`Sending OTP email to trusted contact ${to}`);
+    this.logger.log(`[Email] Sending OTP email to trusted contact ${to}`);
     return this.send({
       to,
       subject: 'MindLock — Approval code',
@@ -104,13 +123,13 @@ export class EmailService implements OnModuleInit {
         `Your approval code is: ${code}`,
         '',
         'Share this code with the requester only if you approve.',
-        'The code expires in 5 minutes.',
+        'The code expires in 10 minutes.',
       ].join('\n'),
       html: `<p>Hi ${trustedPersonName},</p>
 <p>Someone is requesting <strong>${purpose}</strong>.</p>
 <p>Your approval code is:</p>
 <h2 style="letter-spacing:4px;">${code}</h2>
-<p>Share this code with the requester only if you approve. It expires in <strong>5 minutes</strong>.</p>`,
+<p>Share this code with the requester only if you approve. It expires in <strong>10 minutes</strong>.</p>`,
     });
   }
 }
