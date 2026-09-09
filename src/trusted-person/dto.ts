@@ -35,6 +35,11 @@ export class VerifyTrustedPersonOtpDto {
   code: string;
 }
 
+export class CompleteReplacementDto extends InviteTrustedPersonDto {
+  @IsString()
+  replacementToken: string;
+}
+
 export class InviteTokenPayload {
   @IsString()
   userId: string;

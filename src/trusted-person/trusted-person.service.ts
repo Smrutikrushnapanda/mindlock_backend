@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -13,10 +14,16 @@ import { InviteOtp } from '../entities/invite-otp.entity';
 import { TrustedPerson } from '../entities/trusted-person.entity';
 import { EmailService } from '../email/email.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { InviteTrustedPersonDto, UpdateTrustedPersonDto, VerifyTrustedPersonOtpDto } from './dto';
+import {
+  InviteTrustedPersonDto,
+  UpdateTrustedPersonDto,
+  VerifyTrustedPersonOtpDto,
+  CompleteReplacementDto,
+} from './dto';
 
-const INVITE_OTP_TTL_MS = 10 * 60 * 1000;
-const INVITE_OTP_ATTEMPTS_LIMIT = 5;
+const OTP_TTL_MS = 10 * 60 * 1000;
+const OTP_ATTEMPTS_LIMIT = 5;
+const REPLACEMENT_TOKEN_TTL_MS = 15 * 60 * 1000;
 
 @Injectable()
 export class TrustedPersonService {
@@ -31,10 +38,11 @@ export class TrustedPersonService {
     private readonly notifications: NotificationsService,
   ) {}
 
+  // ─── Existing invite flow ────────────────────────────────────────
+
   async invite(userId: string, dto: InviteTrustedPersonDto) {
     this.logger.log(`[TrustedPerson] Invite requested for email: ${dto.email}`);
 
-    // Step 1: Create or update trusted person record
     let person = await this.persons.findOne({ where: { userId } });
     if (person) {
       this.logger.log(`[TrustedPerson] Updating existing trusted person record`);
@@ -46,21 +54,20 @@ export class TrustedPersonService {
     await this.persons.save(person);
     this.logger.log(`[TrustedPerson] Trusted person saved (id: ${person.id})`);
 
-    // Step 2: Generate OTP and save
     const code = this.generateCode();
     this.logger.log(`[TrustedPerson] OTP generated`);
     const existing =
-      (await this.inviteOtps.findOne({ where: { userId } })) ??
-      this.inviteOtps.create({ userId, email: dto.email });
+      (await this.inviteOtps.findOne({ where: { userId, purpose: 'invite' } })) ??
+      this.inviteOtps.create({ userId, email: dto.email, purpose: 'invite' });
     existing.code = await bcrypt.hash(code, 10);
     existing.email = dto.email;
-    existing.expiresAt = new Date(Date.now() + INVITE_OTP_TTL_MS);
+    existing.expiresAt = new Date(Date.now() + OTP_TTL_MS);
     existing.attempts = 0;
     existing.verified = false;
+    existing.purpose = 'invite';
     await this.inviteOtps.save(existing);
     this.logger.log(`[TrustedPerson] OTP saved to database`);
 
-    // Step 3: Send invitation email
     this.logger.log(`[TrustedPerson] Sending invitation email`);
     const result = await this.email
       .sendOtpEmail({
@@ -86,7 +93,6 @@ export class TrustedPersonService {
       );
     }
 
-    // Step 4: Create notification
     await this.notifications.create(
       userId,
       'trusted_invite',
@@ -122,7 +128,7 @@ export class TrustedPersonService {
       throw new NotFoundException('No trusted person set — invite them first');
     }
 
-    const otp = await this.inviteOtps.findOne({ where: { userId } });
+    const otp = await this.inviteOtps.findOne({ where: { userId, purpose: 'invite' } });
     if (!otp || otp.verified) {
       this.logger.warn(`[TrustedPerson] No active OTP found or already verified`);
       throw new BadRequestException('No active verification code — invite again');
@@ -131,7 +137,7 @@ export class TrustedPersonService {
       this.logger.warn(`[TrustedPerson] OTP expired`);
       throw new BadRequestException('Verification code has expired — invite again');
     }
-    if (otp.attempts >= INVITE_OTP_ATTEMPTS_LIMIT) {
+    if (otp.attempts >= OTP_ATTEMPTS_LIMIT) {
       this.logger.warn(`[TrustedPerson] Too many failed attempts`);
       throw new BadRequestException('Too many failed attempts — invite again');
     }
@@ -140,8 +146,8 @@ export class TrustedPersonService {
     if (!matches) {
       otp.attempts += 1;
       await this.inviteOtps.save(otp);
-      const remaining = INVITE_OTP_ATTEMPTS_LIMIT - otp.attempts;
-      this.logger.warn(`[TrustedPerson] Incorrect OTP (attempts: ${otp.attempts}/${INVITE_OTP_ATTEMPTS_LIMIT})`);
+      const remaining = OTP_ATTEMPTS_LIMIT - otp.attempts;
+      this.logger.warn(`[TrustedPerson] Incorrect OTP (attempts: ${otp.attempts}/${OTP_ATTEMPTS_LIMIT})`);
       throw new BadRequestException(
         remaining <= 0
           ? 'Too many failed attempts — invite again'
@@ -169,7 +175,154 @@ export class TrustedPersonService {
     return saved;
   }
 
-  // Legacy JWT-invite path, kept for previously sent emails.
+  // ─── Replacement flow ────────────────────────────────────────────
+
+  async requestReplacement(userId: string) {
+    this.logger.log(`[TrustedPerson] Replacement request for user: ${userId}`);
+
+    const person = await this.persons.findOne({ where: { userId } });
+    if (!person) {
+      throw new NotFoundException('No trusted person set');
+    }
+    if (!person.verified) {
+      throw new BadRequestException('Current trusted person is not verified — cannot replace');
+    }
+
+    const code = this.generateCode();
+    this.logger.log(`[TrustedPerson] Replacement OTP generated`);
+
+    const existing =
+      (await this.inviteOtps.findOne({ where: { userId, purpose: 'replacement' } })) ??
+      this.inviteOtps.create({ userId, email: person.email, purpose: 'replacement' });
+    existing.code = await bcrypt.hash(code, 10);
+    existing.email = person.email;
+    existing.expiresAt = new Date(Date.now() + OTP_TTL_MS);
+    existing.attempts = 0;
+    existing.verified = false;
+    existing.purpose = 'replacement';
+    await this.inviteOtps.save(existing);
+    this.logger.log(`[TrustedPerson] Replacement OTP saved to database`);
+
+    const result = await this.email
+      .sendOtpEmail({
+        to: person.email,
+        code,
+        trustedPersonName: person.name,
+        purpose: 'to authorize replacing your trusted person in MindLock',
+      })
+      .catch((err) => {
+        this.logger.error(
+          `[TrustedPerson] Replacement email send failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+        return { delivered: false as const };
+      });
+
+    if (result.delivered) {
+      this.logger.log(`[TrustedPerson] Replacement email sent successfully`);
+    } else {
+      this.logger.warn(`[TrustedPerson] Replacement email not delivered`);
+    }
+
+    return {
+      email: person.email,
+      name: person.name,
+      emailDelivered: result.delivered,
+    };
+  }
+
+  async verifyReplacement(userId: string, dto: VerifyTrustedPersonOtpDto) {
+    this.logger.log(`[TrustedPerson] Replacement OTP verification requested`);
+
+    const person = await this.persons.findOne({ where: { userId } });
+    if (!person || !person.verified) {
+      throw new NotFoundException('No verified trusted person found');
+    }
+
+    const otp = await this.inviteOtps.findOne({ where: { userId, purpose: 'replacement' } });
+    if (!otp || otp.verified) {
+      this.logger.warn(`[TrustedPerson] No active replacement OTP found or already verified`);
+      throw new BadRequestException('No active verification code — request a new one');
+    }
+    if (otp.expiresAt.getTime() < Date.now()) {
+      this.logger.warn(`[TrustedPerson] Replacement OTP expired`);
+      throw new BadRequestException('Verification code has expired — request a new one');
+    }
+    if (otp.attempts >= OTP_ATTEMPTS_LIMIT) {
+      this.logger.warn(`[TrustedPerson] Too many failed replacement attempts`);
+      throw new BadRequestException('Too many failed attempts — request a new one');
+    }
+
+    const matches = await bcrypt.compare(dto.code, otp.code);
+    if (!matches) {
+      otp.attempts += 1;
+      await this.inviteOtps.save(otp);
+      const remaining = OTP_ATTEMPTS_LIMIT - otp.attempts;
+      this.logger.warn(`[TrustedPerson] Incorrect replacement OTP (attempts: ${otp.attempts}/${OTP_ATTEMPTS_LIMIT})`);
+      throw new BadRequestException(
+        remaining <= 0
+          ? 'Too many failed attempts — request a new one'
+          : `Incorrect code — ${remaining} attempts remaining`,
+      );
+    }
+
+    this.logger.log(`[TrustedPerson] Replacement OTP verified successfully`);
+    otp.verified = true;
+    await this.inviteOtps.save(otp);
+
+    const replacementSecret = this.config.get<string>('JWT_INVITE_SECRET');
+    const token = await this.jwt.signAsync(
+      {
+        sub: userId,
+        type: 'trusted-person-replacement',
+        personId: person.id,
+        exp: Math.floor(Date.now() / 1000) + Math.floor(REPLACEMENT_TOKEN_TTL_MS / 1000),
+      },
+      { secret: replacementSecret },
+    );
+
+    this.logger.log(`[TrustedPerson] Replacement authorization token issued`);
+    return { replacementToken: token };
+  }
+
+  async completeReplacement(userId: string, dto: CompleteReplacementDto) {
+    this.logger.log(`[TrustedPerson] Replacement completion requested`);
+
+    let payload: { sub: string; type: string; personId: string };
+    try {
+      payload = await this.jwt.verifyAsync(dto.replacementToken, {
+        secret: this.config.get<string>('JWT_INVITE_SECRET'),
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid or expired replacement authorization');
+    }
+
+    if (payload.type !== 'trusted-person-replacement' || payload.sub !== userId) {
+      throw new UnauthorizedException('Invalid replacement authorization');
+    }
+
+    const currentPerson = await this.persons.findOne({ where: { userId } });
+    if (!currentPerson || currentPerson.id !== payload.personId) {
+      throw new UnauthorizedException('Replacement authorization does not match current trusted person');
+    }
+
+    this.logger.log(`[TrustedPerson] Replacement authorization valid — creating new trusted person`);
+
+    const person = await this.invite(userId, dto);
+
+    await this.notifications.create(
+      userId,
+      'trusted_invite',
+      'Trusted person replaced',
+      `${dto.name} has been invited to replace your previous trusted person`,
+    );
+
+    return person;
+  }
+
+  // ─── Legacy ──────────────────────────────────────────────────────
+
   async verify(dto: { token: string }) {
     this.logger.log(`[TrustedPerson] Legacy JWT verification requested`);
     let payload: { userId: string; email: string; type?: string };

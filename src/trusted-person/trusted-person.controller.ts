@@ -1,7 +1,12 @@
 import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AuthUser, CurrentUser } from '../auth/current-user.decorator';
-import { InviteTrustedPersonDto, UpdateTrustedPersonDto, VerifyTrustedPersonOtpDto } from './dto';
+import {
+  InviteTrustedPersonDto,
+  UpdateTrustedPersonDto,
+  VerifyTrustedPersonOtpDto,
+  CompleteReplacementDto,
+} from './dto';
 import { TrustedPersonService } from './trusted-person.service';
 
 @Controller('trusted-person')
@@ -30,6 +35,24 @@ export class TrustedPersonController {
   @UseGuards(JwtAuthGuard)
   verifyOtp(@CurrentUser() user: AuthUser, @Body() dto: VerifyTrustedPersonOtpDto) {
     return this.persons.verifyOtp(user.id, dto);
+  }
+
+  @Post('replacement/request')
+  @UseGuards(JwtAuthGuard)
+  requestReplacement(@CurrentUser() user: AuthUser) {
+    return this.persons.requestReplacement(user.id);
+  }
+
+  @Post('replacement/verify')
+  @UseGuards(JwtAuthGuard)
+  verifyReplacement(@CurrentUser() user: AuthUser, @Body() dto: VerifyTrustedPersonOtpDto) {
+    return this.persons.verifyReplacement(user.id, dto);
+  }
+
+  @Post('replacement/complete')
+  @UseGuards(JwtAuthGuard)
+  completeReplacement(@CurrentUser() user: AuthUser, @Body() dto: CompleteReplacementDto) {
+    return this.persons.completeReplacement(user.id, dto);
   }
 
   @Post('verify')

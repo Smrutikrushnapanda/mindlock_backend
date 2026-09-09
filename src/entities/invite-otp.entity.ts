@@ -6,8 +6,11 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
+export type OtpPurpose = 'invite' | 'replacement';
+
 @Entity('invite_otps')
 @Index(['email', 'verified'])
+@Index(['userId', 'purpose'])
 export class InviteOtp {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -29,6 +32,9 @@ export class InviteOtp {
 
   @Column({ default: false })
   verified: boolean;
+
+  @Column({ type: 'varchar', default: 'invite' })
+  purpose: OtpPurpose;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
